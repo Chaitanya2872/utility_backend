@@ -30,3 +30,8 @@ npm-debug.log*
 # Build files
 dist/
 build/
+.env
+.env.*
+!.env.example
+node_modules/
+*.log
