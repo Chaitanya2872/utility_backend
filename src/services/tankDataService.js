@@ -74,6 +74,30 @@ export async function sensorData(req, res) {
               }
             }
           } 
+          // The app asks with the base module's id + the tank's slot (TM1..).
+          // That is a tank reading, so poll the tank, not the switch.
+          else if (device.device_type === "base" && device.thing_name &&
+            space.devices.some(d => d.device_type === "tank" &&
+              d.parent_device_id === deviceid && d.slave_name === sensorNumber)) {
+            const tank = space.devices.find(d => d.device_type === "tank" &&
+              d.parent_device_id === deviceid && d.slave_name === sensorNumber);
+            thingName = device.thing_name;
+            try {
+              const updateTopic = getTopic("update", thingName, "update");
+              const updateMsg = {
+                deviceid: deviceid,
+                device: "tank",
+                sensor_no: sensorNumber,
+                slaveid: tank.device_id,
+                switch_no: tank.parent_switch_no,
+                request_type: "poll"
+              };
+              await publishToIoT(updateTopic, updateMsg);
+              logger.info(`📤 Published update request for tank slot ${deviceid}/${sensorNumber}`, updateMsg);
+            } catch (publishError) {
+              logger.error(`⚠️ Error publishing update request: ${publishError.message}`);
+            }
+          }
           // If it's a base device
           else if (device.device_type === "base" && device.thing_name) {
             thingName = device.thing_name;

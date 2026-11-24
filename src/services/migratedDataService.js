@@ -41,9 +41,13 @@ export async function getLatestSensorData(deviceid, sensorNo) {
       deviceid: deviceid,
       sensor_no: sensorNo,
       message_type: "update",
+      // Skip the backend's own poll requests on the update topic.
+      request_type: { $ne: "poll" },
       $or: [
         { value: { $gt: 0 } },  // value as number
-        { value: { $gt: "0" } } // value as string
+        { value: { $gt: "0" } }, // value as string
+        { level: { $gt: 0 } },
+        { level: { $gt: "0" } }
       ]
     };
     
@@ -115,7 +119,10 @@ export async function getLatestSwitchStatus(deviceid, switchNo) {
         { sensor_no: switchNo }
       ],
       device_type: { $in: ["base", null] },
-      message_type: "update"
+      message_type: "update",
+      // Skip the backend's own poll requests (they carry the stored status,
+      // not what the device reports).
+      request_type: { $ne: "poll" }
     };
     
     logger.info(`🔍 Query:`, JSON.stringify(query, null, 2));
