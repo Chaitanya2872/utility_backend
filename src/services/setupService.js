@@ -2,13 +2,11 @@
 import { User } from "../config/dbconfig.js";
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
-import AWS from "aws-sdk";
+import { publishToIoT } from "../utils/mqttHelper.js";
 
-// Initialize AWS IoT Data client for direct control calls
-const iotData = new AWS.IotData({
-  endpoint: process.env.IOT_ENDPOINT,
-  region: process.env.AWS_REGION || "ap-south-1",
-});
+// All MQTT publishes go through publishToIoT (AWS Lambda), like the rest of
+// the backend. The previous direct AWS.IotData client failed on the server
+// with "Error publishing setting: null" (an AWS error with an empty message).
 
 /**
  * Helper function to get device thingId from MongoDB
@@ -122,11 +120,7 @@ async function autoControlBaseDevices(condition, space) {
     };
 
     // Publish control command
-    await iotData.publish({
-      topic: controlTopic,
-      payload: JSON.stringify(controlPayload),
-      qos: 0
-    }).promise();
+    await publishToIoT(controlTopic, controlPayload);
 
     logger.info(`✅ Auto-control published for device ${condition.device_id} to topic: ${controlTopic}`);
 
@@ -154,19 +148,17 @@ async function autoControlBaseDevices(condition, space) {
           // Add delay if specified
           if (action.delay && action.delay > 0) {
             setTimeout(async () => {
-              await iotData.publish({
-                topic: actionControlTopic,
-                payload: JSON.stringify(actionControlPayload),
-                qos: 0
-              }).promise();
-              logger.info(`✅ Delayed auto-control published for action device ${action.device_id}`);
+              // Runs outside the surrounding try/catch, so catch here: an
+              // unhandled rejection would crash the Node process.
+              try {
+                await publishToIoT(actionControlTopic, actionControlPayload);
+                logger.info(`✅ Delayed auto-control published for action device ${action.device_id}`);
+              } catch (delayedError) {
+                logger.error(`Error in delayed auto-control for action device ${action.device_id}: ${delayedError.message}`);
+              }
             }, action.delay * 1000);
           } else {
-            await iotData.publish({
-              topic: actionControlTopic,
-              payload: JSON.stringify(actionControlPayload),
-              qos: 0
-            }).promise();
+            await publishToIoT(actionControlTopic, actionControlPayload);
             logger.info(`✅ Auto-control published for action device ${action.device_id}`);
           }
 
@@ -196,15 +188,11 @@ async function publishSetting(deviceId, mqttPayload) {
 
     const topic = `mqtt/device/${thingId}/setting`;
     
-    await iotData.publish({
-      topic,
-      payload: JSON.stringify(mqttPayload),
-      qos: 1
-    }).promise();
+    await publishToIoT(topic, mqttPayload);
 
     logger.info(`✅ Published setting to ${topic}:`, mqttPayload);
   } catch (error) {
-    logger.error(`Error publishing setting: ${error.message}`);
+    logger.error(`Error publishing setting: ${error.name || ''} ${error.code || ''} ${error.message}`);
     throw error;
   }
 }

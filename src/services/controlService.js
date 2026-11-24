@@ -9,6 +9,7 @@ import {
 } from "../services/migratedControlService.js";
 import logger from "../utils/logger.js";
 import { getTopic } from "../config/awsIotConfig.js";
+import { User } from "../config/dbconfig.js";
 
 /**
  * Control device via AWS Lambda (IAM-secured)
@@ -40,6 +41,24 @@ export async function control(req, res) {
     await publishToIoT(topic, payload);
 
     logger.info("✅ Control command published via Lambda", { deviceid, thingid });
+
+    // Remember the switch's new state. GET /status sends a poll to the
+    // device's update topic carrying the stored status; without this it kept
+    // sending the old "off", which flipped a switch back off right after the
+    // app turned it on.
+    const { switch_no, status } = req.body;
+    if (switch_no && (status === "on" || status === "off")) {
+      try {
+        await User.updateOne(
+          { "spaces.devices.device_id": deviceid },
+          { $set: { "spaces.$[].devices.$[d].status": status } },
+          { arrayFilters: [{ "d.device_id": deviceid, "d.switch_no": switch_no }] }
+        );
+      } catch (dbError) {
+        logger.error(`⚠️ Could not save status for ${deviceid}/${switch_no}: ${dbError.message}`);
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "Control command published successfully",
