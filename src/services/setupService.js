@@ -396,8 +396,8 @@ export async function createSetup(mobileNumber, spaceId, setupData) {
           deviceid: baseDevice.device_id,  // BASE DEVICE ID (e.g., "IOTIQBM_A0525001")
           sensor_no: conditionDevice.slave_name || setupData.condition.sensor_no || "TM1",
           slot: setupData.condition.slot,
-          Trigger: setupData.condition.trigger.toString(),
-          Stop: setupData.condition.stop.toString(),
+          minimum: setupData.condition.trigger.toString(), // level that starts the motor
+          maximum: setupData.condition.stop.toString(), // level that stops the motor
           ...actionCodes // A1, A2, A3, etc.
         };
 
@@ -656,8 +656,8 @@ export async function updateSetup(mobileNumber, spaceId, setupId, setupData) {
             deviceid: baseDevice.device_id,
             sensor_no: conditionDevice.slave_name || setupData.condition.sensor_no || "TM1",
             slot: setupData.condition.slot,
-            Trigger: setupData.condition.trigger.toString(),
-            Stop: setupData.condition.stop.toString(),
+            minimum: setupData.condition.trigger.toString(), // level that starts the motor
+            maximum: setupData.condition.stop.toString(), // level that stops the motor
             ...actionCodes
           };
 
